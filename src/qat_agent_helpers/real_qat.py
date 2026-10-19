@@ -174,8 +174,10 @@ class RealAppConnection:
         x: int | None = None,
         y: int | None = None,
     ) -> None:
-        # What qat.mouse_click() sends, minus its pre-flight wait, which skips the visible
-        # and enabled check for objects addressed by uid. Qat reads the modifiers as a list.
+        # What qat.mouse_press() and qat.mouse_release() send, minus their pre-flight wait,
+        # which skips the visible and enabled check for objects addressed by uid. A single
+        # non-blocking "click" does not reach Qt Quick buttons on macOS (ADR 0001), so a
+        # click is sent as a press and a release. Qat reads the modifiers as a list.
         args: dict[str, Any] = {
             "button": button,
             "modifier": list(modifiers) or "none",
@@ -183,10 +185,10 @@ class RealAppConnection:
         }
         if x is not None and y is not None:
             args["x"], args["y"] = x, y
-        mode = "double-click" if double else "click"
-        self._send(
-            {"command": "mouse", "object": {"cache_uid": uid}, "attribute": mode, "args": args}
-        )
+        for mode in ("double-click",) if double else ("press", "release"):
+            self._send(
+                {"command": "mouse", "object": {"cache_uid": uid}, "attribute": mode, "args": args}
+            )
 
     def type_text(self, uid: str, text: str) -> bool:
         # What qat.type_in() sends. Qat focuses the object first and warns when no widget

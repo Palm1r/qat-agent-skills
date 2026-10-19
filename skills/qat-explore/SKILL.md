@@ -80,7 +80,8 @@ Actions first wait, as long as `qat.wait_for_object()` would, until their target
 
 ## Pitfalls
 
-- **Modal dialogs.** A click whose handler opens a dialog with `exec()` makes Qat's `qat.mouse_click()` wait until the dialog closes, so the script hangs. `qat_agent_helpers.click()` and `qat_agent_helpers.press_keys()` return at once. In a plain Qat call, pass `blocking=False`, then wait for the dialog with `qat.wait_for_object()`.
+- **Modal dialogs.** A click whose handler opens a dialog with `exec()` makes Qat's `qat.mouse_click()` wait until the dialog closes, so the script hangs. `qat_agent_helpers.click()` and `qat_agent_helpers.press_keys()` return at once. In a plain Qat call, send `qat.mouse_press(target, blocking=False)` and `qat.mouse_release(target, blocking=False)`, then wait for the dialog with `qat.wait_for_object()`.
+- **Non-blocking clicks on Qt Quick buttons.** On macOS, `qat.mouse_click(target, blocking=False)` does not reach a Qt Quick `Button`: nothing happens and no error is raised. `qat_agent_helpers.click()` sends a press and a release instead and works.
 - **Return in a text field.** A blocking `qat.shortcut(field, "Return")` raises "No widget accepted this event", because a `QLineEdit` lets Return through after it emits `returnPressed`. Use `qat_agent_helpers.press_keys()`, or pass `blocking=False`.
 - **Check boxes.** Qt toggles a `QCheckBox` only on clicks on its indicator or its text, and layouts often stretch the widget, so a click at its centre misses. `qat_agent_helpers.click()` aims at the indicator and raises `NotToggledError` if `checked` did not change. In a plain Qat call, click at `x=10, y=height // 2`, or press Space on it.
 - **Ambiguous definitions.** Two objects with the same `objectName` make a definition match both, and Qat fails. Take the `def=` of the one you mean from the snapshot or from the error, or give the object a unique `objectName` in the app's code.

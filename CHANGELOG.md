@@ -13,3 +13,7 @@ All notable changes to this project are documented in this file. The format is b
   - `definition_for()`, and errors that list every match of an ambiguous definition with its own definition.
   - The `launch_app` pytest fixture.
 - The agent skills in `skills/`: qat-explore, for driving a running app from scripts, and qat-tests, for turning what was learned into pytest tests.
+
+### Fixed
+
+- `click()` reaches Qt Quick buttons on macOS: it sends a non-blocking press and release instead of Qat's non-blocking `click`, which those buttons never received.

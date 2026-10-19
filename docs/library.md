@@ -34,7 +34,7 @@ A target is a Qat definition or a Qat object proxy. There are no refs. A definit
 | `App.detach()` | For an attached app; attached apps are never closed. |
 | `App.context`, `App.pid` | The Qat `ApplicationContext`, for direct Qat calls, and the process id. |
 | `snapshot(target=None, depth=None, include_hidden=False, include_internal=False) -> str` | A compact object tree, described below the table. Without a target, it shows every top-level window of the current app. |
-| `click(target, button="left", double=False, modifiers=(), x=None, y=None)` | A non-blocking click followed by a barrier ([ADR 0001](adr/0001-input-is-non-blocking-with-a-barrier.md)). For check boxes, radio buttons and switches, it aims at the indicator and raises if `checked` did not change. |
+| `click(target, button="left", double=False, modifiers=(), x=None, y=None)` | A non-blocking press and release, followed by a barrier ([ADR 0001](adr/0001-input-is-non-blocking-with-a-barrier.md)). For check boxes, radio buttons and switches, it aims at the indicator and raises if `checked` did not change. |
 | `press_keys(target, keys)` | A key or shortcut such as `Return` or `Ctrl+S`, sent with `shortcut(..., blocking=False)` and followed by a barrier. |
 | `type_text(target, text)` | Calls `type_in`, which is blocking because Qat has no other mode. Refuses non-ASCII text with a hint to set the `text` property instead. |
 | `definition_for(obj) -> dict` | A portable definition that matches only this object, for tests. When none is unique, it returns the best candidate with an `AmbiguousDefinitionWarning`. |
