@@ -10,7 +10,7 @@ These tests launch a Qt app, drive it through [Qat](https://gitlab.com/testing-t
 
 ## Setup
 
-Add the library as a dev dependency of the project that holds the tests. It is not on PyPI yet, so install it from its GitHub release tag, for example with `uv add --dev "qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.1.0"`. Its pytest plugin provides the `launch_app` fixture, so the tests need no conftest.
+Add the library as a dev dependency of the project that holds the tests. It is not on PyPI yet, so install it from its GitHub release tag, for example with `uv add --dev "qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.1.1"`. Its pytest plugin provides the `launch_app` fixture, so the tests need no conftest.
 
 ## Writing a test
 

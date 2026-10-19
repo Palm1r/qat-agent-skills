@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-19
+
+### Fixed
+
+- `click()` reaches Qt Quick buttons on macOS: it sends a non-blocking press and release instead of Qat's non-blocking `click`, which those buttons never received.
+
+## [0.1.0] - 2026-10-19
+
 ### Added
 
 - qat-agent-helpers, a helper library for agents' Qat scripts:
@@ -14,6 +22,6 @@ All notable changes to this project are documented in this file. The format is b
   - The `launch_app` pytest fixture.
 - The agent skills in `skills/`: qat-explore, for driving a running app from scripts, and qat-tests, for turning what was learned into pytest tests.
 
-### Fixed
-
-- `click()` reaches Qt Quick buttons on macOS: it sends a non-blocking press and release instead of Qat's non-blocking `click`, which those buttons never received.
+[Unreleased]: https://github.com/Palm1r/qat-agent-skills/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Palm1r/qat-agent-skills/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/Palm1r/qat-agent-skills/releases/tag/v0.1.0

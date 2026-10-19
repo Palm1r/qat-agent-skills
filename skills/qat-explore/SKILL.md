@@ -94,7 +94,7 @@ Actions first wait, as long as `qat.wait_for_object()` would, until their target
   ```python
   # /// script
   # requires-python = ">=3.10"
-  # dependencies = ["qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.1.0"]
+  # dependencies = ["qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.1.1"]
   # ///
   ```
 

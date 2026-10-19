@@ -23,11 +23,11 @@ qat-agent-helpers is not on PyPI yet, so it installs from this repository's rele
   ```python
   # /// script
   # requires-python = ">=3.10"
-  # dependencies = ["qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.1.0"]
+  # dependencies = ["qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.1.1"]
   # ///
   ```
 
-- a test suite adds it as a dev dependency: `uv add --dev "qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.1.0"`.
+- a test suite adds it as a dev dependency: `uv add --dev "qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.1.1"`.
 
 ## Using it
 
