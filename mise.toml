@@ -1,0 +1,25 @@
+[tools]
+python = "3.13"
+uv = "0.13"
+
+[env]
+# The interpreter itself: uv takes a directory for an installation that the project's
+# virtual environment never matches, and would recreate .venv on every run.
+UV_PYTHON = { value = "{{ tools.python.path }}{{ os(windows='/python.exe', linux='/bin/python3', macos='/bin/python3') }}", tools = true }
+UV_PYTHON_DOWNLOADS = "never"
+
+[tasks.lint]
+description = "Check formatting and lint with ruff"
+run = ["uv run ruff format --check", "uv run ruff check"]
+
+[tasks.typecheck]
+description = "Type-check with pyright"
+run = "uv run pyright"
+
+[tasks.test]
+description = "Run the unit tests (no Qt needed)"
+run = "uv run pytest tests/unit"
+
+[tasks.build]
+description = "Build the wheel and the source distribution into dist/"
+run = "uv build"
