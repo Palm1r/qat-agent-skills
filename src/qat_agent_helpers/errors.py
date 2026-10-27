@@ -1,5 +1,3 @@
-"""The errors qat-agent-helpers raises. Each message says what went wrong and what to do next."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -39,10 +37,6 @@ class NotToggledError(QatAgentHelpersError, AssertionError):
 
 class NotAcceptedError(QatAgentHelpersError, RuntimeError):
     """No widget accepted the typed keys."""
-
-
-class NonAsciiTextError(QatAgentHelpersError, ValueError):
-    """type_text() got characters that Qat cannot type."""
 
 
 class AmbiguousDefinitionWarning(UserWarning):

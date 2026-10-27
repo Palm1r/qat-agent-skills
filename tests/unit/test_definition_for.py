@@ -1,5 +1,3 @@
-"""definition_for() gives a portable definition that matches only the object, for tests."""
-
 import pytest
 
 import qat_agent_helpers
@@ -52,6 +50,41 @@ def test_a_look_alike_object_gets_a_container(use_fake, executable):
         "text": "OK",
         "container": {"objectName": "openDialog", "type": "QDialog"},
     }
+
+
+def test_the_definition_a_snapshot_shows_is_the_one_definition_for_returns(use_fake, executable):
+    open_app(
+        use_fake,
+        executable,
+        widget(
+            "QDialog",
+            "saveDialog",
+            widget("QFrame", "", widget("QPushButton", "", text="OK", focus=True), text="Options"),
+            widget("QFrame", "", widget("QPushButton", "", text="OK"), text="Other"),
+        ),
+        widget(
+            "QDialog",
+            "openDialog",
+            widget("QFrame", "", widget("QPushButton", "", text="OK"), text="Options"),
+        ),
+    )
+
+    definition = qat_agent_helpers.definition_for({"type": "QPushButton", "focus": True})
+
+    assert definition == {
+        "type": "QPushButton",
+        "text": "OK",
+        "container": {
+            "type": "QFrame",
+            "text": "Options",
+            "container": {"objectName": "saveDialog", "type": "QDialog"},
+        },
+    }
+    assert qat_agent_helpers.snapshot().splitlines()[2] == (
+        '    - QPushButton "OK" focused def={"type": "QPushButton", "text": "OK", "container": '
+        '{"type": "QFrame", "text": "Options", "container": {"objectName": "saveDialog", '
+        '"type": "QDialog"}}}'
+    )
 
 
 def test_without_a_unique_definition_the_best_one_comes_with_a_warning(use_fake, executable):

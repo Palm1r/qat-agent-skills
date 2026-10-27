@@ -1,20 +1,12 @@
-"""One line per object: its type, #objectName, QML id=, text, flags and definition.
-
-QPushButton #incrementButton "Increment" def={"objectName": "incrementButton", ...}
-"""
-
 from __future__ import annotations
 
 import json
 from typing import Any
 
-from qat_agent_helpers.definitions import python_literal
-
 MAX_TEXT_LENGTH = 80
 
 
 def describe(properties: dict[str, Any], definition: dict[str, Any] | None) -> str:
-    """The object's line, with `definition` as def={...} when it has a unique one."""
     parts = [str(properties.get("type", "QObject"))]
     object_name = properties.get("objectName")
     if object_name:
@@ -32,13 +24,22 @@ def describe(properties: dict[str, Any], definition: dict[str, Any] | None) -> s
 
 
 def is_visual(properties: dict[str, Any]) -> bool:
-    """Widgets, Qt Quick items and windows have a visibility and a size; other QObjects don't."""
     has_size = "geometry" in properties or ("width" in properties and "height" in properties)
     return "visible" in properties and has_size
 
 
+def python_literal(value: Any) -> str:
+    if isinstance(value, dict):
+        items = (f"{python_literal(key)}: {python_literal(item)}" for key, item in value.items())
+        return "{" + ", ".join(items) + "}"
+    if isinstance(value, list | tuple):
+        return "[" + ", ".join(python_literal(item) for item in value) + "]"
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    return repr(value)
+
+
 def _text(properties: dict[str, Any]) -> str | None:
-    """The quoted text or title, or the placeholder of an empty field."""
     text = None
     for name in ("text", "title"):
         value = properties.get(name)
@@ -61,7 +62,6 @@ def _flags(properties: dict[str, Any]) -> list[str]:
         flags.append("hidden")
     if properties.get("enabled") is False:
         flags.append("disabled")
-    # A Qt Quick item's `focus` only marks it within its focus scope.
     focus_property = "activeFocus" if "activeFocus" in properties else "focus"
     if properties.get(focus_property) is True:
         flags.append("focused")

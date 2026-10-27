@@ -6,7 +6,7 @@ resolution-markers = [
     "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.14.*' and sys_platform != 'emscripten'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten'",
-    "(python_full_version >= '3.11' and python_full_version < '3.14' and sys_platform != 'emscripten') or (python_full_version == '3.11.*' and sys_platform == 'emscripten')",
+    "python_full_version == '3.11.*' or (python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'emscripten')",
     "python_full_version < '3.11'",
 ]
 
@@ -253,7 +253,7 @@ resolution-markers = [
     "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.14.*' and sys_platform != 'emscripten'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten'",
-    "(python_full_version >= '3.11' and python_full_version < '3.14' and sys_platform != 'emscripten') or (python_full_version == '3.11.*' and sys_platform == 'emscripten')",
+    "python_full_version == '3.11.*' or (python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'emscripten')",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ce/a4/9cc30690a394a8305e8be4c9036aa16d0dfddadd09079860b582f562496d/pillow-13.0.0.tar.gz", hash = "sha256:cdcd1ba258178f7356d74170c9a81ba4eab6a5d55748bc402a5a2a6fe6be3510", size = 47058631, upload-time = "2026-10-16T22:18:09.718Z" }
 wheels = [
@@ -392,7 +392,7 @@ wheels = [
 
 [[package]]
 name = "qat"
-version = "1.8.1"
+version = "1.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "behave" },
@@ -402,9 +402,9 @@ dependencies = [
     { name = "tkinter-tooltip" },
     { name = "xmlschema" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cb/1d/6cf0bbc376b24fa0bb1f34eb5d5701d4c8d5a95d80bfedbc1fe9ce97e74a/qat-1.8.1.tar.gz", hash = "sha256:697d46b5cd6481197fb616e4be87946f5f775dab481547941460c43c63e0130b", size = 20543573, upload-time = "2026-09-25T13:08:20.545Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/25/36/e1d6c7ef35fc6a93809a592580e3c031753d316069ea2e3f7c0b3a7bbfbf/qat-1.9.0.tar.gz", hash = "sha256:27b731e33599fc5c7e23aae883198ff7ae9e3f63a1cfa545fcf8b3969079c2ec", size = 21827445, upload-time = "2026-10-28T22:49:15.338Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d9/74/0bd09599b8b93f0dd34363ee2c50b57b3580bb85660578cf5a28dae76bb2/qat-1.8.1-py3-none-any.whl", hash = "sha256:380395843120ab09301f619b44464b59dc8287a1d23aabb27ee8675c5d9eaf45", size = 20665275, upload-time = "2026-09-25T13:08:17.259Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/d2/78abb7c7dd96b01666a3a64681065232b0e4985bfff2235bca1c796b0220/qat-1.9.0-py3-none-any.whl", hash = "sha256:49ee0a38b4bd582c1888104dadaafe5a4b205758660eee53b8362163034ba2f5", size = 21965641, upload-time = "2026-10-28T22:49:12.486Z" },
 ]
 
 [[package]]
@@ -423,7 +423,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "qat", specifier = "==1.8.1" }]
+requires-dist = [{ name = "qat", specifier = "==1.9.0" }]
 
 [package.metadata.requires-dev]
 dev = [

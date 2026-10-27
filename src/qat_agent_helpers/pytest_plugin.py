@@ -1,10 +1,3 @@
-"""The pytest plugin of qat-agent-helpers, registered through the pytest11 entry point.
-
-def test_counter(launch_app):
-    launch_app("path/to/app.exe")
-    qat_agent_helpers.click({"objectName": "incrementButton"})
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator

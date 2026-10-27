@@ -1,10 +1,3 @@
-"""Apps: launching Qt processes or attaching to them, and closing or detaching them.
-
-The newest app is Qat's current app, so that Qat's own functions, such as
-qat.wait_for_object(), act on it right away. Launched apps still open when the script
-ends are closed then.
-"""
-
 from __future__ import annotations
 
 import atexit
@@ -14,10 +7,10 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any
 
+from qat_agent_helpers import macos
 from qat_agent_helpers.adapter import AppConnection, QatAdapter
 from qat_agent_helpers.errors import QatAgentHelpersError
 
-# How long close() gives an app to quit before it kills it.
 QUIT_TIMEOUT = 5.0
 
 _adapter: QatAdapter | None = None
@@ -73,7 +66,8 @@ class App:
             )
         if not self._done:
             self._connection.detach()
-            _forget(self)
+            self._mark_closed()
+            _release([self])
 
     def __enter__(self) -> App:
         return self
@@ -89,6 +83,10 @@ class App:
         else:
             self.detach()
 
+    def _mark_closed(self, exit_code: int | None = None) -> None:
+        self._done = True
+        self._exit_code = exit_code
+
     def __repr__(self) -> str:
         how = "launched" if self._launched else "attached"
         where = f" {self._path}" if self._path else ""
@@ -103,10 +101,18 @@ def launch(
 ) -> App:
     """Start an app with Qat injected and wait until it is connected (ADR 0002).
 
-    `env` adds variables for this app only. `lock_ui` lets Qat block user input to it.
-    No applications.json is written, and the app is launched once, without retries.
+    `path` is the app's executable or, on macOS, its .app bundle. `env` adds variables for
+    this app only. `lock_ui` lets Qat block user input to it. No applications.json is
+    written, and the app is launched once, without retries.
     """
     executable = Path(path).expanduser().resolve()
+    if executable.suffix == ".app" and executable.is_dir():
+        bundle, executable = executable, macos.bundle_executable(executable)
+        if not executable.is_file():
+            raise FileNotFoundError(
+                f"The app bundle {bundle} has no executable at {executable}. Pass the full "
+                f"path to the app's executable instead, from {bundle.name}/Contents/MacOS/."
+            )
     if not executable.is_file():
         raise FileNotFoundError(
             f"No executable at {executable}. Pass the full path to the app's executable."
@@ -124,22 +130,35 @@ def attach(pid: int) -> App:
 
 
 def current_app() -> App:
-    """The newest app that is still open."""
+    context = adapter().current_context()
+    if context is not None:
+        return app_of_context(context)
     if not _apps:
         raise QatAgentHelpersError(
             "No app is open: launch one with qat_agent_helpers.launch() or attach with "
             "qat_agent_helpers.attach()."
         )
-    return _apps[-1]
+    count = len(_apps)
+    raise QatAgentHelpersError(
+        f"No app is current, but {count} {'is' if count == 1 else 'are'} open: "
+        + ", ".join(repr(app) for app in _apps)
+        + ". Make one current with qat.set_current_application_context(app.context), or launch "
+        "or attach another with qat_agent_helpers."
+    )
+
+
+def app_of_context(context: Any) -> App:
+    for app in _apps:
+        if app.context is context:
+            return app
+    return App(adapter().adopt(context), launched=False, path=None)
 
 
 def open_apps() -> list[App]:
-    """The apps launched or attached to and not yet closed or detached, oldest first."""
     return list(_apps)
 
 
 def close_all() -> None:
-    """Close every launched app that is still open, and detach every attached one."""
     open_apps = list(reversed(_apps))
     _close_apps([app for app in open_apps if app.launched], QUIT_TIMEOUT)
     for app in open_apps:
@@ -149,33 +168,38 @@ def close_all() -> None:
 
 def _remember(app: App) -> App:
     _apps.append(app)
-    app.connection.make_current()
+    adapter().make_current(app.context)
     return app
 
 
-def _forget(app: App) -> None:
-    app._done = True
-    if app in _apps:
-        _apps.remove(app)
-        if _apps:
-            _apps[-1].connection.make_current()
+def _release(released: list[App]) -> None:
+    current = adapter().current_context()
+    was_current = any(app.context is current for app in released)
+    for app in released:
+        if app in _apps:
+            _apps.remove(app)
+    if was_current:
+        adapter().make_current(_apps[-1].context if _apps else None)
 
 
 def _close_apps(closing: list[App], timeout: float) -> None:
-    """Ask every app to quit at once, then kill those still running after `timeout` seconds."""
     for app in closing:
         app.connection.quit()
     deadline = time.monotonic() + timeout
     for app in closing:
         exit_code = app.connection.wait_for_exit(max(0.0, deadline - time.monotonic()))
-        app.connection.kill()  # also frees Qat's side of the connection
-        app._exit_code = exit_code if exit_code is not None else app.connection.wait_for_exit(0)
-        _forget(app)
+        app.connection.kill()
+        app._mark_closed(exit_code if exit_code is not None else app.connection.wait_for_exit(0))
+    _release(closing)
+
+
+def adapter() -> QatAdapter:
+    return _qat()
 
 
 def _qat() -> QatAdapter:
-    # Created on first use. The exit hook is registered after qat's own, so that it runs
-    # first and lets the apps quit before Qat's hook kills them.
+    # The exit hook is registered after qat's own, so that it runs first and lets the apps
+    # quit before Qat's hook kills them.
     global _adapter
     if _adapter is None:
         from qat_agent_helpers.real_qat import RealQat

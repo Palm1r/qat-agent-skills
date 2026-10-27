@@ -1,10 +1,3 @@
-"""The Qat adapter backed by the qat package (1.8.1).
-
-It is written against the Qat 1.8.1 source rather than its documentation, and it uses
-Qat internals where the public API falls short (ADR 0002). It leaves Qat's settings to
-the script and to its testSettings.json.
-"""
-
 from __future__ import annotations
 
 import os
@@ -21,22 +14,27 @@ from qat.internal import find_object as qat_find
 from qat.internal.application_context import ApplicationContext
 from qat.test_settings import Settings, load_test_settings
 
-from qat_agent_helpers.adapter import Child
+from qat_agent_helpers import linux, macos
+from qat_agent_helpers.adapter import Child, Proxy
 from qat_agent_helpers.errors import AppGoneError, CommandError, LaunchError, ObjectGoneError
 
 T = TypeVar("T")
 
-# What Qat says when a cache_uid no longer names a live object.
 EXPIRED_OBJECT = "May have expired in cache"
+CONTAINER_NOT_ONE = (
+    "No object found that matches this definition",
+    "Multiple objects found that match this definition",
+)
 
-# How long an input command or a barrier may take, and how long a killed app may take
-# to go away.
 REQUEST_TIMEOUT_MS = 10_000
 KILL_TIMEOUT = 5.0
 
+# On macOS a Debug build connects too, as long as it loads Qt's release frameworks.
 TARGET_REQUIREMENTS = (
-    "a Release or RelWithDebInfo build with dynamically linked Qt 5.15 or 6.2-6.11"
+    ("a build" if sys.platform == "darwin" else "a Release or RelWithDebInfo build")
+    + " with dynamically linked Qt 5.15 or 6.2-6.12"
     + (", built with MSVC," if sys.platform == "win32" else "")
+    + (", without the hardened runtime," if sys.platform == "darwin" else "")
     + " that shows a visible top-level window"
 )
 
@@ -45,14 +43,20 @@ class RealQat:
     def launch(
         self, path: Path, args: list[str], env: dict[str, str], *, lock_ui: bool
     ) -> RealAppConnection:
-        # Qat's start_application() reads the environment only from os.environ, does not
-        # quote the executable path on Windows, needs a registry entry and launches twice
-        # on failure, so the library starts the process itself and reuses Qat's injection and
-        # connection steps.
         _load_test_settings()
-        context = ApplicationContext(path.stem, str(path))
         process_env = {**os.environ, **env}
         process_env.setdefault("TEMP", str(qat_environment.get_temp_folder()))
+        if sys.platform == "darwin":
+            server_dir = app_launcher.get_injector(path.parent).parent
+            mismatch = macos.server_mismatch(path, server_dir)
+            if mismatch is not None:
+                raise LaunchError(mismatch)
+        elif sys.platform.startswith("linux"):
+            server_dir = app_launcher.get_injector(path.parent).parent
+            missing = linux.missing_server(path, server_dir, process_env)
+            if missing is not None:
+                raise LaunchError(missing)
+        context = ApplicationContext(path.stem, str(path))
         if sys.platform.startswith("linux"):
             process_env["LD_PRELOAD"] = str(app_launcher.get_injector(path.parent))
         elif sys.platform == "darwin":
@@ -69,6 +73,10 @@ class RealQat:
         context._internal.process = process  # pyright: ignore[reportAttributeAccessIssue]
         context._internal.has_ownership = True
         context.pid = process.pid
+        # The app's Qat server leaves its port in the app's TEMP, which env may set; a relative
+        # one is relative to the app's working folder.
+        port_file = qat_environment.create_qat_config_file_path(process.pid).name
+        context.config_file = path.parent / process_env["TEMP"] / port_file
 
         try:
             if sys.platform == "win32":
@@ -90,8 +98,6 @@ class RealQat:
         return RealAppConnection(context, process)
 
     def attach(self, pid: int) -> RealAppConnection:
-        # Qat's attach_to_application() also takes names, matched as substrings of command
-        # lines; the library attaches by pid only, with the same injection and connection steps.
         _load_test_settings()
         if not app_launcher.can_attach(pid):
             raise LaunchError(
@@ -112,13 +118,31 @@ class RealQat:
         qat.get_state().app_context_list.append(context)
         return RealAppConnection(context, None)
 
+    def adopt(self, context: ApplicationContext) -> RealAppConnection:
+        return RealAppConnection(context, None)
+
+    def current_context(self) -> ApplicationContext | None:
+        return qat.current_application_context()
+
+    def make_current(self, context: ApplicationContext | None) -> None:
+        qat.set_current_application_context(context)  # pyright: ignore[reportArgumentType]
+
+    def proxy_of(self, target: Any) -> Proxy | None:
+        if not isinstance(target, qat.QtObject):
+            return None
+        # QtObject resolves attributes remotely, so its context is read from __dict__.
+        return Proxy(target.__dict__["_app_context"], dict(target.get_definition()))
+
+    def wait_timeout(self) -> float:
+        return Settings.wait_for_object_timeout / 1000
+
 
 class RealAppConnection:
     def __init__(
         self, context: ApplicationContext, process: subprocess.Popen[bytes] | None
     ) -> None:
         self._context = context
-        self._process = process  # None for an attached app
+        self._process = process
 
     @property
     def pid(self) -> int:
@@ -128,15 +152,11 @@ class RealAppConnection:
     def context(self) -> ApplicationContext:
         return self._context
 
-    def make_current(self) -> None:
-        qat.set_current_application_context(self._context)
-
     def top_windows(self) -> list[str]:
         windows = self._call(lambda: qat_find.list_top_windows(self._context))
         return [_uid_of(window) for window in windows]
 
     def children(self, uid: str) -> list[Child]:
-        # QtObject.__getattr__ answers a `children` request with a list of QtObjects.
         children = cast(list[qat.QtObject], self._call(lambda: self._object(uid).children))
         return [
             Child(uid=_uid_of(child), has_children=bool(child.get_definition().get("children")))
@@ -148,18 +168,28 @@ class RealAppConnection:
         return {name: _plain(value) for name, value in properties}
 
     def find(self, definition: dict[str, Any]) -> list[str]:
-        matches = self._call(lambda: qat_find.find_all_objects(self._context, definition))
+        try:
+            matches = self._call(lambda: qat_find.find_all_objects(self._context, definition))
+        except LookupError as error:
+            container_refused = any(text in str(error) for text in CONTAINER_NOT_ONE)
+            if isinstance(error, ObjectGoneError) or not container_refused:
+                raise
+            return []
         return [_uid_of(match) for match in matches]
 
     def parent(self, uid: str) -> str | None:
-        # Qat answers `parent` for widgets, Qt Quick items and windows, as an object.
         try:
             parent = self._call(lambda: self._object(uid).parent)
         except AttributeError:
             return None
-        if not isinstance(parent, qat.QtObject) or parent.is_null():
-            return None
-        return _uid_of(parent)
+        if isinstance(parent, qat.QtObject) and not parent.is_null():
+            return _uid_of(parent)
+        # Qat gives a Qt Quick window's content item no parent, yet lists it among the
+        # window's children, which is where a snapshot's walk meets it.
+        for window in self.top_windows():
+            if any(child.uid == uid for child in self.children(window)):
+                return window
+        return None
 
     def is_a(self, uid: str, type_name: str) -> bool:
         return bool(self._call(lambda: self._object(uid).is_a(type_name)))
@@ -174,10 +204,7 @@ class RealAppConnection:
         x: int | None = None,
         y: int | None = None,
     ) -> None:
-        # What qat.mouse_press() and qat.mouse_release() send, minus their pre-flight wait,
-        # which skips the visible and enabled check for objects addressed by uid. A single
-        # non-blocking "click" does not reach Qt Quick buttons on macOS (ADR 0001), so a
-        # click is sent as a press and a release. Qat reads the modifiers as a list.
+        # A press and a release rather than Qat's "click" (ADR 0001).
         args: dict[str, Any] = {
             "button": button,
             "modifier": list(modifiers) or "none",
@@ -189,17 +216,15 @@ class RealAppConnection:
             self._send(
                 {"command": "mouse", "object": {"cache_uid": uid}, "attribute": mode, "args": args}
             )
+        self._barrier()
 
     def type_text(self, uid: str, text: str) -> bool:
-        # What qat.type_in() sends. Qat focuses the object first and warns when no widget
-        # accepted the keys.
         result = self._send(
             {"command": "keyboard", "object": {"cache_uid": uid}, "attribute": "type", "args": text}
         )
         return "warning" not in result
 
     def press_keys(self, uid: str, keys: str) -> None:
-        # What qat.shortcut() sends; unlike the mouse, it takes `blocking` at the top level.
         self._send(
             {
                 "command": "keyboard",
@@ -209,14 +234,14 @@ class RealAppConnection:
                 "blocking": False,
             }
         )
+        self._barrier()
 
-    def barrier(self) -> None:
-        # No object lookup, and the same queued path to the GUI thread as posted input.
+    def _barrier(self) -> None:
+        """Return once the app has handled the input posted before: the request takes the same
+        queued path to the GUI thread, even from a dialog's exec() (ADR 0001)."""
         self._send({"command": "list", "attribute": "versionInfo"})
 
     def quit(self) -> None:
-        # Qat itself only kills apps. The call is sent once, as every state-changing command
-        # is: the client's retries would re-send it while the app shuts down (ADR 0001).
         quit_call = {
             "command": "call",
             "object": qat.QApp,
@@ -224,20 +249,18 @@ class RealAppConnection:
             "args": [],
             "blocking": False,
         }
-        # An app that is already gone is left to wait_for_exit() and kill().
         with suppress(ConnectionError, RuntimeError):
             self._context.send_command(quit_call, 3000, nb_trials=1)
 
     def wait_for_exit(self, timeout: float) -> int | None:
         if self._process is None:
-            return None  # an attached app's exit code is not ours to see
+            return None
         try:
             return self._process.wait(timeout)
         except subprocess.TimeoutExpired:
             return None
 
     def kill(self) -> None:
-        # Also stops Qat's callback server and removes the app's port file.
         self._context.kill()
         if self._process is not None:
             with suppress(subprocess.TimeoutExpired):
@@ -245,16 +268,21 @@ class RealAppConnection:
         self._forget()
 
     def detach(self) -> None:
-        self._context.detach()
-        self._forget()
+        try:
+            self._context.detach()
+        except ConnectionError:
+            # Qat's detach() says goodbye to the app first, and when the app has exited it
+            # raises before it stops its own server. It drops its client on the way, so a
+            # second call gets past the goodbye.
+            self._context.detach()
+        finally:
+            self._forget()
 
     def _forget(self) -> None:
-        """Remove the app from Qat's global state, which would otherwise kill it at exit."""
+        """Remove the app from Qat's list of apps, whose exit hook would otherwise kill it."""
         state = qat.get_state()
         if self._context in state.app_context_list:
             state.app_context_list.remove(self._context)
-        if state.current_app_context is self._context:
-            state.current_app_context = None
 
     def _object(self, uid: str) -> qat.QtObject:
         return qat.QtObject(self._context, {"cache_uid": uid})
@@ -269,7 +297,6 @@ class RealAppConnection:
             raise CommandError(str(error)) from error
 
     def _call(self, request: Callable[[], T]) -> T:
-        """Send a request, translating Qat's errors for dead objects and dead apps."""
         # QtObject silently switches to Qat's "current" app when its own app is gone.
         if not self._context.is_running():
             raise AppGoneError(f"The app with pid {self.pid} is no longer running.")
@@ -288,7 +315,6 @@ def _uid_of(qt_object: qat.QtObject) -> str:
 
 
 def _plain(value: Any) -> Any:
-    """A property value as plain data: object references become their uid."""
     if isinstance(value, qat.QtObject):
         return {"uid": _uid_of(value)}
     if isinstance(value, qat.QtCustomObject):
@@ -297,6 +323,5 @@ def _plain(value: Any) -> Any:
 
 
 def _load_test_settings() -> None:
-    """Read testSettings.json as Qat itself does, without Qat's notice when there is none."""
     if not Settings.loaded and Path("testSettings.json").is_file():
         load_test_settings()

@@ -1,12 +1,8 @@
-"""snapshot() shows an object tree as text, one line per object, with its definition."""
-
 import pytest
 
 import qat_agent_helpers
 from tests.unit.fake_qat import FakeApp, item, line_edit, list_widget, qobject, widget
 
-# About 8k tokens of snapshot lines, at roughly three characters per token. Codex cuts
-# the middle out of text results longer than 10k tokens.
 BUDGET_CHARS = 24_000
 
 
@@ -123,7 +119,6 @@ def test_non_visual_objects_are_left_out_and_shared_children_shown_once(use_fake
 
 
 def test_hidden_objects_are_shown_only_with_include_hidden(use_fake, executable):
-    # The children of a hidden widget report visible=False too, as in Qt.
     secret = widget("QLabel", "secretLabel", text="The secret is 42", visible=False)
     launch(use_fake, executable, FakeApp(widget("QMainWindow", "mainWindow", secret)))
 
@@ -193,6 +188,20 @@ def test_a_definition_target_starts_the_tree_at_its_object(use_fake, executable)
     ]
 
 
+def test_a_target_unique_only_inside_a_container_above_it_shows_that_definition(
+    use_fake, executable
+):
+    save = widget("QDialog", "saveDialog", widget("QPushButton", "", text="OK"))
+    open_ = widget("QDialog", "openDialog", widget("QPushButton", "", text="OK"))
+    launch(use_fake, executable, FakeApp(save, open_))
+    ok = {"type": "QPushButton", "text": "OK", "container": {"objectName": "openDialog"}}
+
+    assert qat_agent_helpers.snapshot(ok).splitlines() == [
+        '- QPushButton "OK" def={"type": "QPushButton", "text": "OK", '
+        '"container": {"objectName": "openDialog", "type": "QDialog"}}'
+    ]
+
+
 def test_a_definition_matching_several_objects_lists_them_with_their_definitions(
     use_fake, executable
 ):
@@ -258,15 +267,23 @@ def test_texts_are_quoted_and_escaped_and_long_ones_shortened(use_fake, executab
     assert lines[2].startswith('  - QLabel "' + "a" * 77 + '..." def=')
 
 
-def test_a_snapshot_over_the_budget_is_cut_and_says_how_many_objects_are_missing(
+def test_a_snapshot_over_the_budget_is_cut_with_a_note_and_stops_asking_the_app(
     use_fake, executable
 ):
     labels = [widget("QLabel", f"label{n:04}", text="x" * 40) for n in range(1000)]
-    launch(use_fake, executable, FakeApp(widget("QMainWindow", "mainWindow", *labels)))
+    app = FakeApp(widget("QMainWindow", "mainWindow", *labels))
+    launch(use_fake, executable, app)
+    asked: list[str] = []
+    properties = app.properties
+    app.properties = lambda uid: (asked.append(uid), properties(uid))[1]
 
     snapshot = qat_agent_helpers.snapshot()
 
     lines = snapshot.splitlines()
     assert len(snapshot) <= BUDGET_CHARS
-    shown = len(lines) - 1
-    assert lines[-1] == f"{1001 - shown} more objects not shown; narrow with a target or depth."
+    assert (
+        lines[-1]
+        == "...cut here, at about 8k tokens; narrow with a target or depth to see more objects."
+    )
+    assert 100 < len(lines) < 400
+    assert len(asked) == len(lines)

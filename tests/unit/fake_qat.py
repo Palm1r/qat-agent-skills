@@ -1,9 +1,3 @@
-"""A fake Qat adapter: apps are in-memory object trees, so the unit tests need no Qt.
-
-Objects report the properties real Qat reports for them: widgets have `geometry`,
-Qt Quick items have `width` and `height`, and non-visual QObjects have neither.
-"""
-
 from __future__ import annotations
 
 import itertools
@@ -15,11 +9,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from qat_agent_helpers.adapter import Child
+from qat_agent_helpers.adapter import Child, Proxy
 from qat_agent_helpers.errors import AppGoneError, CommandError, LaunchError, ObjectGoneError
 
 _uids = itertools.count(1000)
 _pids = itertools.count(4000)
+
+CHECK_STATES = ("Unchecked", "PartiallyChecked", "Checked")
 
 
 @dataclass(eq=False)
@@ -27,12 +23,9 @@ class FakeObject:
     properties: dict[str, Any]
     children: list[FakeObject] = field(default_factory=list)
     uid: str = field(default_factory=lambda: str(next(_uids)))
-    # What the app does when the object is clicked (given the click's options) or gets keys.
     on_click: Callable[[dict[str, Any]], None] | None = None
     on_keys: Callable[[str], None] | None = None
-    # Whether typed text lands in its `text` property, as in a QLineEdit.
     takes_text: bool = False
-    # The classes it inherits from, besides its own `type`.
     bases: tuple[str, ...] = ()
 
     def walk(self):
@@ -54,7 +47,6 @@ def widget(
     checked: bool | None = None,
     size: tuple[int, int] = (100, 30),
 ) -> FakeObject:
-    """A QWidget, which has a geometry, a size and an empty QML id."""
     width, height = size
     properties: dict[str, Any] = {
         "type": type,
@@ -91,7 +83,6 @@ def item(
     focus: bool = False,
     active_focus: bool = False,
 ) -> FakeObject:
-    """A Qt Quick item, which has a size and maybe a QML id."""
     properties: dict[str, Any] = {
         "type": type,
         "objectName": object_name,
@@ -115,8 +106,6 @@ def item(
 def check_box(
     object_name: str, text: str, *, checked: bool = False, size: tuple[int, int] = (400, 21)
 ) -> FakeObject:
-    """A QCheckBox stretched by its layout. As in Qt, it toggles only when a click hits its
-    indicator or its text, here the first 80 pixels, so a click at its centre misses."""
     box = widget("QCheckBox", object_name, text=text, checked=checked, size=size)
     box.bases = ("QAbstractButton", "QWidget")
 
@@ -129,24 +118,43 @@ def check_box(
     return box
 
 
-def qml_check_box(object_name: str, text: str, *, checked: bool = False) -> FakeObject:
-    """A Qt Quick CheckBox, whose `indicator` property points at its indicator item."""
+def tristate_check_box(object_name: str, text: str, *, state: str) -> FakeObject:
+    """A QCheckBox whose clicks cycle through three states. Qt Widgets show no check state,
+    and `checked` is true for a partly checked box too."""
+    box = check_box(object_name, text, checked=state != "Unchecked")
+    box.properties["tristate"] = True
+    states = [state]
+
+    def cycle(options: dict[str, Any]) -> None:
+        x = options["x"] if options["x"] is not None else box.properties["width"] // 2
+        if options["button"] == "left" and x < 80:
+            states[0] = CHECK_STATES[(CHECK_STATES.index(states[0]) + 1) % 3]
+            box.properties["checked"] = states[0] != "Unchecked"
+
+    box.on_click = cycle
+    return box
+
+
+def qml_check_box(
+    object_name: str, text: str, *, state: str = "Unchecked", tristate: bool = False
+) -> FakeObject:
+    """A Qt Quick CheckBox, which shows its check state; `checked` is true only when checked."""
     indicator = item("CheckIndicator", "", qml_id="indicator")
     indicator.properties.update(x=6, y=4, width=28, height=28)
     box = item("CheckBox", object_name, indicator, text=text)
-    box.properties.update(checkable=True, checked=checked, indicator={"uid": indicator.uid})
-    box.properties.update(width=120, height=36)
+    box.properties.update(checkable=True, tristate=tristate, indicator={"uid": indicator.uid})
+    box.properties.update(checkState=state, checked=state == "Checked", width=120, height=36)
 
     def toggle(options: dict[str, Any]) -> None:
-        box.properties["checked"] = not box.properties["checked"]
+        states = CHECK_STATES if tristate else ("Unchecked", "Checked")
+        after = states[(states.index(box.properties["checkState"]) + 1) % len(states)]
+        box.properties.update(checkState=after, checked=after == "Checked")
 
     box.on_click = toggle
     return box
 
 
 def list_widget(object_name: str) -> FakeObject:
-    """A QListWidget as Qt builds it: a viewport for its items and a container for each
-    scroll bar. Its items overflow only vertically, so the horizontal container is hidden."""
     return widget(
         "QListWidget",
         object_name,
@@ -162,23 +170,16 @@ def list_widget(object_name: str) -> FakeObject:
 
 
 def line_edit(object_name: str = "", text: str = "", **options: Any) -> FakeObject:
-    """A QLineEdit: a widget that takes typed text."""
     field = widget("QLineEdit", object_name, text=text, **options)
     field.takes_text = True
     return field
 
 
 def qobject(type: str, object_name: str = "", *children: FakeObject) -> FakeObject:
-    """A non-visual QObject such as a layout or a model."""
     return FakeObject({"type": type, "objectName": object_name}, list(children))
 
 
 class FakeApp:
-    """A launched app: implements AppConnection over a tree of FakeObjects.
-
-    Each request about its objects takes `seconds_per_request`, like a Qat round trip.
-    """
-
     def __init__(
         self, *windows: FakeObject, quits: bool = True, seconds_per_request: float = 0.0
     ) -> None:
@@ -190,20 +191,15 @@ class FakeApp:
         self.connected = True
         self.killed = False
         self.detached = False
-        self.context = object()  # stands for Qat's ApplicationContext
-        self.current = False  # whether it is Qat's current app
-        # The input commands the app received, as (command, uid, options).
+        self.context = object()
         self.inputs: list[tuple[str, str, dict[str, Any]]] = []
         self._destroyed: set[str] = set()
         self._later: list[tuple[float, FakeObject, dict[str, Any]]] = []
         self._answering = threading.Event()
         self._answering.set()
 
-    # Test controls
-
     @contextmanager
     def stalled(self) -> Iterator[None]:
-        """Requests made during the block wait until it ends, as when the app is busy."""
         self._answering.clear()
         try:
             yield
@@ -221,21 +217,13 @@ class FakeApp:
         self.exit_code = code
 
     def lose_connection(self) -> None:
-        """The app keeps running but no longer answers Qat."""
         self.connected = False
 
     def later(self, seconds: float, obj: FakeObject, **properties: Any) -> None:
-        """Change the object's properties once `seconds` have passed, as a timer would."""
         self._later.append((time.monotonic() + seconds, obj, properties))
-
-    # AppConnection
-
-    def make_current(self) -> None:
-        self.current = True
 
     def detach(self) -> None:
         self.detached = True
-        self.current = False
 
     def top_windows(self) -> list[str]:
         self._request()
@@ -248,17 +236,10 @@ class FakeApp:
         return dict(self._find(uid).properties)
 
     def find(self, definition: dict[str, Any]) -> list[str]:
-        """Qat's matching: every property in the definition has exactly the given value.
-
-        As in Qat, an object without a `visible` or `enabled` property counts as visible
-        and enabled, and a `container` definition limits the search to the descendants
-        of the objects it matches.
-        """
         self._request()
         return [obj.uid for obj in self._matches(definition)]
 
     def parent(self, uid: str) -> str | None:
-        """The nearest object that lists this one, preferring a widget over a layout."""
         self._find(uid)
         parents = [
             obj for obj in self._objects().values() if any(c.uid == uid for c in obj.children)
@@ -288,6 +269,8 @@ class FakeApp:
     def type_text(self, uid: str, text: str) -> bool:
         obj = self._find(uid)
         self.inputs.append(("type", uid, {"text": text}))
+        if obj.on_keys is not None:
+            obj.on_keys(text)
         if not obj.takes_text:
             return False
         obj.properties["text"] = obj.properties.get("text", "") + text
@@ -298,9 +281,6 @@ class FakeApp:
         self.inputs.append(("keys", uid, {"keys": keys}))
         if obj.on_keys is not None:
             obj.on_keys(keys)
-
-    def barrier(self) -> None:
-        self._request()
 
     def is_a(self, uid: str, type_name: str) -> bool:
         obj = self._find(uid)
@@ -314,7 +294,6 @@ class FakeApp:
         return self.exit_code
 
     def kill(self) -> None:
-        self.current = False
         if self.exit_code is None:
             self.killed = True
             self.exit_code = 1
@@ -326,9 +305,11 @@ class FakeApp:
         defaults = {"visible": True, "enabled": True}
         properties = {name: value for name, value in definition.items() if name != "container"}
         if "container" in definition:
-            scope: dict[str, FakeObject] = {}
-            for container in self._matches(definition["container"]):
-                scope.update({obj.uid: obj for obj in container.walk() if obj is not container})
+            containers = self._matches(definition["container"])
+            if len(containers) != 1:
+                return []
+            container = containers[0]
+            scope = {obj.uid: obj for obj in container.walk() if obj is not container}
         else:
             scope = self._objects()
         return [
@@ -347,7 +328,6 @@ class FakeApp:
         return self._objects()[uid]
 
     def _request(self) -> None:
-        """A round trip to the app, which fails once the app is unreachable."""
         # A stalled request gives up after 10 s, so that a broken test fails instead of hanging.
         self._answering.wait(10)
         if self.seconds_per_request:
@@ -360,14 +340,23 @@ class FakeApp:
             change[1].properties.update(change[2])
 
 
+@dataclass(frozen=True)
+class FakeProxy:
+    app: FakeApp
+    obj: FakeObject
+
+
 class FakeQat:
-    """Hands out the given apps, in order, to launch() and attach()."""
+    wait_seconds = 3.0
 
     def __init__(self, *apps: FakeApp, launch_error: str | None = None) -> None:
-        self._apps = list(apps)
+        self.apps = list(apps)  # every app, launched or not
+        self._apps = list(apps)  # those still to hand out
+        self.current: FakeApp | None = None
         self.launch_error = launch_error
         self.launches: list[tuple[Path, list[str], dict[str, str], bool]] = []
         self.attaches: list[int] = []
+        self.adopted: list[FakeApp] = []
 
     def launch(self, path: Path, args: list[str], env: dict[str, str], *, lock_ui: bool) -> FakeApp:
         if self.launch_error is not None:
@@ -380,3 +369,25 @@ class FakeQat:
         app = self._apps.pop(0)
         app.pid = pid
         return app
+
+    def adopt(self, context: Any) -> FakeApp:
+        app = next(app for app in self.apps if app.context is context)
+        self.adopted.append(app)
+        return app
+
+    def current_context(self) -> Any | None:
+        return None if self.current is None else self.current.context
+
+    def make_current(self, context: Any | None) -> None:
+        if context is None:
+            self.current = None
+        else:
+            self.current = next(app for app in self.apps if app.context is context)
+
+    def proxy_of(self, target: Any) -> Proxy | None:
+        if not isinstance(target, FakeProxy):
+            return None
+        return Proxy(target.app.context, {"cache_uid": target.obj.uid})
+
+    def wait_timeout(self) -> float:
+        return self.wait_seconds

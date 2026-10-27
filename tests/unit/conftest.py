@@ -12,7 +12,6 @@ from tests.unit.fake_qat import FakeApp, FakeQat
 
 @pytest.fixture
 def executable(tmp_path: Path) -> Path:
-    """A file for qat_agent_helpers.launch() to accept; the fake Qat never runs it."""
     path = tmp_path / ("demo.exe" if sys.platform == "win32" else "demo")
     path.write_bytes(b"")
     return path
@@ -20,8 +19,6 @@ def executable(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def use_fake(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callable[..., FakeQat]]:
-    """Make the library reach a fake Qat that hands out the given apps to launch() and attach()."""
-
     def use(*fake_apps: FakeApp, **options: str) -> FakeQat:
         fake = FakeQat(*fake_apps, **options)
         monkeypatch.setattr(apps, "_adapter", fake)

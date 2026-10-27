@@ -1,5 +1,3 @@
-"""The pytest plugin: the launch_app fixture closes the apps a test launched."""
-
 from tests.unit.fake_qat import FakeApp, widget
 
 

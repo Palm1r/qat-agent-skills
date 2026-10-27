@@ -1,7 +1,5 @@
-"""qat-agent-helpers launches or attaches to apps.
-
-It closes the apps it launched and only detaches the others.
-"""
+import plistlib
+from pathlib import Path
 
 import pytest
 
@@ -40,6 +38,34 @@ def test_a_path_without_an_executable_is_refused(use_fake, tmp_path):
         qat_agent_helpers.launch(tmp_path / "missing.exe")
 
 
+def make_bundle(tmp_path: Path, executable: str | None) -> Path:
+    bundle = tmp_path / "Demo App.app"
+    (bundle / "Contents" / "MacOS").mkdir(parents=True)
+    (bundle / "Contents" / "Info.plist").write_bytes(plistlib.dumps({"CFBundleExecutable": "demo"}))
+    if executable is not None:
+        (bundle / "Contents" / "MacOS" / executable).write_bytes(b"")
+    return bundle
+
+
+def test_an_app_bundle_launches_the_executable_its_info_plist_names(use_fake, tmp_path):
+    fake = use_fake(demo_app())
+    bundle = make_bundle(tmp_path, "demo")
+
+    app = qat_agent_helpers.launch(bundle)
+
+    assert fake.launches == [(bundle / "Contents" / "MacOS" / "demo", [], {}, False)]
+    assert "Demo App.app/Contents/MacOS/demo" in repr(app).replace("\\", "/")
+
+
+def test_a_bundle_without_its_executable_is_refused_with_where_to_look(use_fake, tmp_path):
+    fake = use_fake()
+    bundle = make_bundle(tmp_path, None)
+
+    with pytest.raises(FileNotFoundError, match=r"no executable at .*demo\. .*Demo App\.app"):
+        qat_agent_helpers.launch(bundle)
+    assert fake.launches == []
+
+
 def test_a_failed_launch_says_why(use_fake, executable):
     use_fake(launch_error="demo exited with code 1 before Qat could connect.")
 
@@ -53,7 +79,7 @@ def test_close_asks_a_launched_app_to_quit_and_returns_its_exit_code(use_fake, e
     app = qat_agent_helpers.launch(executable)
 
     assert app.close() == 0
-    assert app.close() == 0  # closing again changes nothing
+    assert app.close() == 0
     assert not fake_app.killed
 
 

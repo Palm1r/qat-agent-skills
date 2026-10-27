@@ -1,8 +1,3 @@
-"""The seam between this library and Qat: what it needs from Qat, in its own terms.
-
-RealQat implements it with the qat package, and the unit tests use a fake.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,46 +11,38 @@ class Child:
     has_children: bool
 
 
+@dataclass(frozen=True)
+class Proxy:
+    context: Any
+    definition: dict[str, Any]
+
+
 class AppConnection(Protocol):
     """A connected app. Objects are addressed by Qat's cache_uid, here called uid.
 
     Object calls raise ObjectGoneError for a destroyed object and AppGoneError once the
-    app has exited.
+    app has exited. Clicks and keys are posted and return once the app has handled them,
+    so that a modal dialog cannot block them; typed text can only be sent blocking (ADR 0001).
+    kill() and detach() leave Qat's current app as it is (ADR 0003).
     """
 
     @property
     def pid(self) -> int: ...
 
     @property
-    def context(self) -> Any:
-        """Qat's ApplicationContext for the app, for direct Qat calls."""
-        ...
+    def context(self) -> Any: ...
 
-    def make_current(self) -> None:
-        """Make the app Qat's current app, which Qat's own functions act on."""
-        ...
-
-    def top_windows(self) -> list[str]:
-        """The uids of the app's top-level windows."""
-        ...
+    def top_windows(self) -> list[str]: ...
 
     def children(self, uid: str) -> list[Child]: ...
 
-    def properties(self, uid: str) -> dict[str, Any]:
-        """Every property with its value, plus Qat's synthetic `type` and `id` (the QML id)."""
-        ...
+    def properties(self, uid: str) -> dict[str, Any]: ...
 
-    def find(self, definition: dict[str, Any]) -> list[str]:
-        """The uids of every object that matches a Qat definition."""
-        ...
+    def find(self, definition: dict[str, Any]) -> list[str]: ...
 
-    def parent(self, uid: str) -> str | None:
-        """The uid of the object's parent, or None for a top-level object."""
-        ...
+    def parent(self, uid: str) -> str | None: ...
 
-    def is_a(self, uid: str, type_name: str) -> bool:
-        """Whether the object is of the given class or inherits from it."""
-        ...
+    def is_a(self, uid: str, type_name: str) -> bool: ...
 
     def click(
         self,
@@ -66,56 +53,34 @@ class AppConnection(Protocol):
         modifiers: tuple[str, ...] = (),
         x: int | None = None,
         y: int | None = None,
-    ) -> None:
-        """Post a click to the object, without waiting for the app to handle it (ADR 0001).
+    ) -> None: ...
 
-        `x` and `y` are relative to the object; without them the click hits its centre.
-        """
-        ...
+    def type_text(self, uid: str, text: str) -> bool: ...
 
-    def type_text(self, uid: str, text: str) -> bool:
-        """Type ASCII text into the object and wait until the app has handled it.
+    def press_keys(self, uid: str, keys: str) -> None: ...
 
-        Returns False when no widget accepted the keys. Qat has no non-blocking way to
-        type text (ADR 0001).
-        """
-        ...
+    def quit(self) -> None: ...
 
-    def press_keys(self, uid: str, keys: str) -> None:
-        """Post a key or a shortcut such as Return or Ctrl+S to the object, without waiting.
+    def wait_for_exit(self, timeout: float) -> int | None: ...
 
-        `keys` is in QKeySequence's format.
-        """
-        ...
+    def kill(self) -> None: ...
 
-    def barrier(self) -> None:
-        """Return once the app has handled the input posted before this call."""
-        ...
-
-    def quit(self) -> None:
-        """Ask the app to quit, without waiting. Does nothing if it has already exited."""
-        ...
-
-    def wait_for_exit(self, timeout: float) -> int | None:
-        """The exit code, or None if the app is still running after `timeout` seconds."""
-        ...
-
-    def kill(self) -> None:
-        """Kill the app if it is still running and drop the connection to it."""
-        ...
-
-    def detach(self) -> None:
-        """Drop the connection to the app and leave it running."""
-        ...
+    def detach(self) -> None: ...
 
 
 class QatAdapter(Protocol):
     def launch(
         self, path: Path, args: list[str], env: dict[str, str], *, lock_ui: bool
-    ) -> AppConnection:
-        """Start the executable with Qat injected and wait until it connects."""
-        ...
+    ) -> AppConnection: ...
 
-    def attach(self, pid: int) -> AppConnection:
-        """Take over a running Qt process and wait until it connects."""
-        ...
+    def attach(self, pid: int) -> AppConnection: ...
+
+    def adopt(self, context: Any) -> AppConnection: ...
+
+    def current_context(self) -> Any | None: ...
+
+    def make_current(self, context: Any | None) -> None: ...
+
+    def proxy_of(self, target: Any) -> Proxy | None: ...
+
+    def wait_timeout(self) -> float: ...
