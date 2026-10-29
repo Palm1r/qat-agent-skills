@@ -24,10 +24,10 @@ cmake --build build-qat --config RelWithDebInfo
 ## When a launch fails
 
 `launch()` raises a `LaunchError` that gives the reason. The usual causes:
-- on Windows, a Debug build or an app built with MinGW;
+- on Windows, a Debug build, for which Qat prints "Could not find qVersion function", or an app built with MinGW, for which it prints "Failed to load Qat server": the launch fails when Qat gives up waiting, after about 10 s;
 - on macOS, the hardened runtime, or an arm64 app on Qt 5.15;
 - a Qt that Qat has no server for, such as one newer than 6.12: on Linux `launch()` names it at once, while on Windows and macOS the launch fails when Qat gives up waiting, after about 10 s;
-- an app that exits before Qat connects, for example over wrong arguments or a file it cannot find: the error gives its exit code;
+- an app that exits before Qat connects, for example over wrong arguments or a file it cannot find: the error gives its exit code. On Windows, 3221225781 (0xC0000135) means that a DLL it needs was not found, usually one of Qt's: deploy them or put them on `PATH`, as [What an app needs](#what-an-app-needs) says;
 - no visible top-level window, such as an app that starts hidden in the system tray;
 - an agent sandbox, such as Codex's on macOS, where the app cannot reach the window server and exits at once with code -6;
 - an antivirus or a firewall that blocks the injection or the connection on localhost.

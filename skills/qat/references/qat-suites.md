@@ -11,7 +11,7 @@ A Qat suite is laid out by Qat's own template, `qat-create-suite`. New tests go 
 
 ## How the suite starts apps
 
-A suite starts apps by name: `qat.start_application("name")` takes the path from `applications.json`, which `qat.register_application(name, path, args)` or Qat's `qat-gui` writes. Keep that: register the app the suite needs rather than calling `qat_agent_helpers.launch()` in its steps. `qat.register_application()` writes the `applications.json` in the current folder, so call it from the suite's root. The tag `@fixture.app.autoclose` on a feature or a scenario closes its apps when it ends.
+A suite starts apps by name: `qat.start_application("name")` takes the path from `applications.json`, which `qat.register_application(name, path, args)` or Qat's `qat-gui` writes. Keep that: register the app the suite needs rather than calling `qat_agent_helpers.launch()` in its steps. `qat.register_application()` writes the `applications.json` in the current folder, so call it from the suite's root, with the app's absolute path or one relative to that root, where the suite runs. The tag `@fixture.app.autoclose` on a feature or a scenario closes its apps when it ends.
 
 ## qat-agent-helpers in a suite
 
@@ -37,7 +37,7 @@ The library's calls work on the app the suite started, since that app is Qat's c
        qat_agent_helpers.click(bdd_mapping[name])
 
 
-   @Then('the {name} shows "{text}"')
+   @Then('The {name} shows "{text}"')
    def step(context, name, text):
        reached = qat.wait_for_property_value(bdd_mapping[name], "text", text)
        shown = qat.wait_for_object_exists(bdd_mapping[name]).text
