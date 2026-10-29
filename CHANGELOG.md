@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-29
+
 ### Added
 
 - `launch()` takes a macOS `.app` bundle and launches the executable that the bundle's Info.plist names, as Qat's `start_application` does.
@@ -57,6 +59,7 @@ All notable changes to this project are documented in this file. The format is b
   - The `launch_app` pytest fixture.
 - The agent skills in `skills/`: qat-explore, for driving a running app from scripts, and qat-tests, for turning what was learned into pytest tests.
 
-[Unreleased]: https://github.com/Palm1r/qat-agent-skills/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Palm1r/qat-agent-skills/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Palm1r/qat-agent-skills/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Palm1r/qat-agent-skills/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Palm1r/qat-agent-skills/releases/tag/v0.1.0

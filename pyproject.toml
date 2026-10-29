@@ -1,6 +1,6 @@
 [project]
 name = "qat-agent-helpers"
-version = "0.1.1"
+version = "0.2.0"
 description = "Helpers for AI agents that drive running Qt apps with Qat scripts. Unofficial, community-made. Not affiliated with or endorsed by the Qat project."
 readme = "README.md"
 license = "MIT"

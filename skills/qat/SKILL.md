@@ -28,7 +28,7 @@ A script needs no setup in the user's project with this header and `uv run scrip
 ```python
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.1.1"]
+# dependencies = ["qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.2.0"]
 # ///
 ```
 

@@ -4,7 +4,7 @@ These tests launch a Qt app, drive it through Qat with qat-agent-helpers for the
 
 ## Setup
 
-Add the library and pytest as dev dependencies of the project that holds the tests; the library does not bring pytest itself. It is not on PyPI yet, so install it from its GitHub release tag, for example with `uv add --dev pytest "qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.1.1"`. In a folder that has no project yet, run `uv init --bare` first. The library's pytest plugin provides the `launch_app` fixture, so the tests need no conftest.
+Add the library and pytest as dev dependencies of the project that holds the tests; the library does not bring pytest itself. It is not on PyPI yet, so install it from its GitHub release tag, for example with `uv add --dev pytest "qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.2.0"`. In a folder that has no project yet, run `uv init --bare` first. The library's pytest plugin provides the `launch_app` fixture, so the tests need no conftest.
 
 ## Writing a test
 

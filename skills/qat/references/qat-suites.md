@@ -15,7 +15,7 @@ A suite starts apps by name: `qat.start_application("name")` takes the path from
 
 ## qat-agent-helpers in a suite
 
-The library's calls work on the app the suite started, since that app is Qat's current app, and the library never closes an app it did not launch. Use `qat_agent_helpers.click()`, `press_keys()` and `type_text()` in steps for the same reasons as in scripts, the modal dialogs, check boxes and Return in text fields of SKILL.md's pitfalls, and `snapshot()` to find definitions while you write them. Install qat-agent-helpers into the environment the suite runs in. Qat's template keeps no list of dependencies, so add it next to `qat` where the project lists that, in a requirements file or a pyproject, or else install it with `pip install "qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.1.1"` and tell the user.
+The library's calls work on the app the suite started, since that app is Qat's current app, and the library never closes an app it did not launch. Use `qat_agent_helpers.click()`, `press_keys()` and `type_text()` in steps for the same reasons as in scripts, the modal dialogs, check boxes and Return in text fields of SKILL.md's pitfalls, and `snapshot()` to find definitions while you write them. Install qat-agent-helpers into the environment the suite runs in. Qat's template keeps no list of dependencies, so add it next to `qat` where the project lists that, in a requirements file or a pyproject, or else install it with `pip install "qat-agent-helpers @ git+https://github.com/Palm1r/qat-agent-skills@v0.2.0"` and tell the user.
 
 ## Writing a scenario
 
