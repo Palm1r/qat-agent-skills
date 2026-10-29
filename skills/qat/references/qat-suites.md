@@ -7,11 +7,11 @@ A Qat suite is laid out by Qat's own template, `qat-create-suite`. New tests go 
 - A **BDD suite** has a `features/` folder with an `environment.py` that calls `qat.bdd_hooks`, feature files in Gherkin, step modules in `features/steps/` (`given.py`, `when.py`, `then.py`), and an object dictionary, `features/scripts/object_dictionary.py`, whose `bdd_mapping` maps the names used in feature files to definitions.
 - A **script suite** has Python scripts that report through `qat.report`, between `report.start_report()` and `report.stop_report()`, often with an object dictionary in `scripts/object_dictionary.py`.
 - Both keep `applications.json`, the registry of the apps the suite starts, and `testSettings.json` at the suite's root.
-- Qat's `qat-create-suite --dest suite` makes a new BDD suite in `suite/`, and `qat-create-suite script --dest suite` a script suite. Make one only when the user asks for a Qat suite.
+- Qat's `qat-create-suite --dest suite` makes a new BDD suite in `suite/`, and `qat-create-suite script --dest suite` a script suite. Make one only when the user asks for a Qat suite. Its object dictionary names the main window `{'type': 'ApplicationWindow'}`, a Qt Quick type that its demo scenario looks for; for a Qt Widgets app, replace it with the main window's `def=` from a snapshot.
 
 ## How the suite starts apps
 
-A suite starts apps by name: `qat.start_application("name")` takes the path from `applications.json`, which `qat.register_application(name, path, args)` or Qat's `qat-gui` writes. Keep that: register the app the suite needs rather than calling `qat_agent_helpers.launch()` in its steps. The tag `@fixture.app.autoclose` on a feature or a scenario closes its apps when it ends.
+A suite starts apps by name: `qat.start_application("name")` takes the path from `applications.json`, which `qat.register_application(name, path, args)` or Qat's `qat-gui` writes. Keep that: register the app the suite needs rather than calling `qat_agent_helpers.launch()` in its steps. `qat.register_application()` writes the `applications.json` in the current folder, so call it from the suite's root. The tag `@fixture.app.autoclose` on a feature or a scenario closes its apps when it ends.
 
 ## qat-agent-helpers in a suite
 

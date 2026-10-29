@@ -75,6 +75,8 @@ assert view.selectionModel.isSelected(view.model.index(1, 0))
 
 A Qt Quick `ListView`, `GridView` or `TableView` creates delegates only for the part on screen and a little around it, so an item further down does not exist until the view gets there. A delegate is an ordinary object once it exists, with its definition in a snapshot. Scroll the view with `qat.flick(view, dy=...)` or `qat.mouse_wheel(view, y_degrees=..., blocking=False)`, or set its `contentY` property, until `qat.wait_for_object()` finds the delegate.
 
+These views keep no selection of their own: what a click on a delegate does is up to the app, which often sets the view's `currentIndex` or a delegate's `highlighted`. Check the property the app changes. When none changes after a click that reached the delegate, as its `clicked()` signal shows ([Signals](#signals)), the app does not select on a click, and a test cannot make it.
+
 ## Menus and actions
 
 In Qt Widgets, the items of a `QMenuBar` or a `QMenu` are virtual widgets. A definition with the menu bar or the menu as its `container` and the item's `text` finds one; the `&` of a mnemonic is optional. qat-agent-helpers cannot act on them yet, so use Qat's own calls with `blocking=False`, since an item may open a dialog:
@@ -122,6 +124,7 @@ qat.disconnect(connection)
 ## Screenshots
 
 - `qat.grab_screenshot(target, delay=0, timeout=None)` returns an image of the object, taken after `delay` milliseconds. `image.save(path)` writes it, in the format the extension names, and `image.width`, `image.height`, `image.getPixel(x, y)` and `image.getPixelRGBA(x, y)` read it.
+- The image has the screen's pixels, not Qt's: on a scaled display it is larger than the object's `width` and `height`, such as 714×816 for a 420×480 window at 170 %. Scale a point of the object by `image.width / obj.width` before reading its pixel.
 - `qat.take_screenshot(path=None)` saves every top-level window, into a `screenshots/` folder in the current folder when no path is given. Prefer `grab_screenshot()` with a path outside the user's project.
 
 ## Several apps, the registry and settings

@@ -16,7 +16,7 @@ Every task follows the steps below. Some need a file from this skill's `referenc
 |---|---|
 | Writing, fixing or running tests in pytest, or adding the first tests to a project | [references/tests.md](references/tests.md) |
 | A project with a Qat suite: a `features/` folder whose `environment.py` calls `qat.bdd_hooks`, or scripts that report through `qat.report` | [references/qat-suites.md](references/qat-suites.md) |
-| Input other than clicks, keys and typed text (drags, the mouse wheel, hovering, touch), rows of item views, menus, native dialogs, method calls, signals | [references/qat-api.md](references/qat-api.md) |
+| Input other than clicks, keys and typed text (drags, the mouse wheel, hovering, touch), rows of item views and Qt Quick lists, menus, the system's own file dialogs (a `QMessageBox` or a `QDialog` is an ordinary object), method calls, signals, pixels of a screenshot | [references/qat-api.md](references/qat-api.md) |
 | An app that will not launch or connect, a build for Qat, an agent sandbox | [references/platforms.md](references/platforms.md) |
 
 Before you write or change a test, look for a Qat suite in the project: when there is one, the tests go there, in its style, unless the user asks for pytest. A project without one gets a pytest suite.
@@ -36,7 +36,7 @@ In an agent's sandbox, run the scripts and tests outside it from the start: Code
 
 Qat, its injector and its plugins print progress lines, such as "Detected Qt version 6.11.1", "Locking application" or "Client removed". The app is connected once "New connection from 127.0.0.1" appears. Some lines read like errors and are normal too:
 - "Failed to load plugin: ...libQmlPlugin..." in a Qt Widgets app, or "...libQWidgetPlugin..." in a Qt Quick one, on Linux followed by a loader error such as "version `Qt_6.12' not found": Qat drives the app through its other plugin.
-- On Linux and macOS, "Closing server...", "OnUnload", "Stopping Qat server" and "Deleting startup thread" while the app starts: the injector is done, and the app and its Qat server keep running.
+- On Linux and macOS, "Closing server...", "OnUnload", "Stopping Qat server" and "Deleting startup thread": the injector is done, and the app and its Qat server keep running. They come as the app starts, but may show up later, even after the script's own lines, since the app's output and the script's reach a pipe in buffered chunks.
 - When an app closes, "Connection was closed by the client", "Could not close communication with application" and "Stopping Python TCP server", sometimes twice.
 - The app's own warnings, such as Qt Quick's "fontInfo: item has no JS engine" while a snapshot reads properties, or macOS's "TSMSendMessageToUIServer: CFMessagePortSendRequest FAILED(-1)" while text is typed.
 
@@ -74,6 +74,8 @@ Qat, its injector and its plugins print progress lines, such as "Detected Qt ver
    qat.grab_screenshot({"objectName": "mainWindow", "type": "MainWindow"}).save(str(shot))
    print(shot)
    ```
+
+   A Qt Quick window that is not on screen, such as a minimized one, cannot be grabbed: `grab_screenshot()` raises `RuntimeError: Failed to grab image`. On Wayland an app cannot restore its own minimized window, so ask the user to restore it. A Qt Widgets window is grabbed either way.
 
    Rows and cells of Qt Widgets item views, such as a `QListWidget` or a `QTableView`, are virtual widgets, which a snapshot does not list: it shows the view alone. Reach them as references/qat-api.md says.
 
@@ -129,12 +131,13 @@ The calls work on Qat's current app, the one launched or attached last, and so d
 
 - **Definitions** are dicts of property values that must match exactly one object.
   - `type` matches the class or any base class: `{"type": "QAbstractButton"}` finds check boxes too. QML types drop their `QQuick` prefix (`Button`, `TextField`), and `id` matches a QML id.
+  - `text` keeps the `&` of a mnemonic: the Yes button of a `QMessageBox` is `{"type": "QPushButton", "text": "&Yes"}`, and `"Yes"` matches nothing. Only menu items take it either way.
   - `container` limits the search to the descendants of the one object it matches, and may have a container of its own: `{"type": "QPushButton", "text": "OK", "container": {"objectName": "confirmDialog"}}`.
 - **Waits** take timeouts in milliseconds; the default is `qat.Settings.wait_for_object_timeout`, 3000.
   - `qat.wait_for_object(definition)` waits until the object exists, is visible and is enabled, and returns it.
   - `qat.wait_for_object_exists(definition)` waits only until it exists, even hidden or disabled.
   - `qat.wait_for_object_missing(definition)` waits until the object is deleted. A hidden object still exists, so the wait raises `TimeoutError`; to wait until it is hidden, use `qat.wait_for_property_value(definition, "visible", False, check=True)`, which in turn raises `LookupError` once the object is deleted.
-  - `qat.wait_for_property_value(definition, "text", "3", check=True)` waits for a value, and `qat.wait_for_property_change(definition, "text", "3", check=True)` for any value but the one given. Without `check=True` both return False instead of raising.
+  - `qat.wait_for_property_value(definition, "text", "3", check=True)` waits for a value, and `qat.wait_for_property_change(definition, "text", "3", check=True)` for any value but the one given. Without `check=True` both return False instead of raising, and Qat prints a line such as `Warning: Property "text" is "2" (ref is 3)`, which is no error of its own.
   - `qat.wait_for(lambda: ..., timeout=3000)` waits for any condition and returns whether it came true.
 - **Objects:** `obj = qat.wait_for_object(definition)`.
   - Read and write properties as attributes: `obj.text`, `obj.text = "new"`.
@@ -148,5 +151,6 @@ The calls work on Qat's current app, the one launched or attached last, and so d
 - **Return in a text field.** A blocking `qat.shortcut(field, "Return")` raises "No widget accepted this event", because a `QLineEdit` lets Return through after it emits `returnPressed`. Use `qat_agent_helpers.press_keys()`, or pass `blocking=False`.
 - **Check boxes.** Qt toggles a `QCheckBox` only on clicks on its indicator or its text, and layouts often stretch the widget, so a click at its centre misses. `qat_agent_helpers.click()` aims at the indicator and raises `NotToggledError` if the click did not change its check state. In a plain Qat call, click at `x=10, y=height // 2`, or press Space on it.
 - **Ambiguous definitions.** Two objects with the same `objectName` make a definition match both, and Qat fails. Take the `def=` of the one you mean from the snapshot or from the error, or give the object a unique `objectName` in the app's code.
+- **Message boxes under KDE Plasma.** On Linux, an app built with the distribution's Qt loads Plasma's platform theme, which shows a `QMessageBox` through a copy of its own. A snapshot then lists two message boxes with the same text: the app's own, which has a `def=` but ignores clicks, and the copy on screen, which has no parent and no `def=`. Launch the app with `env={"QT_QPA_PLATFORMTHEME": "generic"}`, which makes Qt show its own message box alone.
 - **Emoji in Qt 5 apps.** On Linux and macOS, Qat cannot type characters beyond the Basic Multilingual Plane, such as emoji, into a Qt 5 app. Set the property instead: `qat.wait_for_object(definition).text = "👋"`.
 - **Input that a user could not give.** Qat sends its events to the object even when a dialog covers it, it is scrolled out of view or its window is in the background, so a click that works does not prove that a user can make it. Look at a screenshot when that matters.
