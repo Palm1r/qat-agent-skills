@@ -1,5 +1,29 @@
 # qat-agent-skills
 
+> [!IMPORTANT]
+> **This project has moved to GitLab: https://gitlab.com/testing-tool/qat-agent-skills**
+>
+> This repository is an archive and stays at version 0.2.0. Newer versions, issues and
+> merge requests live on GitLab, in the group of [Qat](https://gitlab.com/testing-tool).
+>
+> To switch to the current skill, remove the one installed from here, then install it
+> from GitLab:
+>
+> ```bash
+> npx skills remove qat
+> npx skills add https://gitlab.com/testing-tool/qat-agent-skills
+> ```
+>
+> - Add `--global` to the first command if you installed the skill for your user, not for
+>   one project.
+> - A skill installed with `gh skill install`, or copied by hand, is removed by deleting
+>   its `qat` folder from the agent's skills folder, such as `.claude/skills/` or
+>   `.agents/skills/`.
+> - If you still have `qat-explore` and `qat-tests` from 0.1.x, remove them the same way.
+>
+> Scripts written with the old skill install the library from this repository and keep
+> working. The new skill's scripts install it from GitLab.
+
 Unofficial, community-made. Not affiliated with or endorsed by the Qat project.
 
 Help AI agents explore running Qt apps, check changes, reproduce bugs and write GUI tests with [Qat](https://gitlab.com/testing-tool/qat). Supports both Qt Widgets and Qt Quick/QML.
